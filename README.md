@@ -107,3 +107,35 @@ const apiKey = res.result.data.apiKey;
 ```
 
 注意：让云函数把 API Key 返回给前端只适合临时调试，线上仍然会暴露 Key。正式上线建议改成“前端上传图片到云函数，云函数调用 Gemini，前端只拿点评结果”，不要把 `apiKey` 返回给浏览器或 App。
+
+## GitHub Pages 调用 uniCloud 云函数
+
+GitHub Pages 只能托管静态页面，不能读取 uniCloud 控制台里的环境变量。要让 Pages 页面使用 uniCloud 的 `GEMINI_API_KEY`，需要部署这个 HTTP 云函数：
+
+```text
+uniCloud-aliyun/cloudfunctions/calligraphy-review-api/
+```
+
+操作步骤：
+
+1. 在 HBuilderX 里右键 `calligraphy-review-api`，上传部署。
+2. 在 uniCloud 控制台给 `calligraphy-review-api` 配置环境变量：
+
+```text
+GEMINI_API_KEY=你的 Google AI Studio API Key
+GEMINI_MODEL=gemini-2.5-flash-lite
+```
+
+3. 在 `calligraphy-review-api` 的“云函数URL化”里开启 HTTP 访问，复制 URL，例如：
+
+```text
+https://fc-xxx.next.bspapp.com
+```
+
+4. 用下面格式打开 GitHub Pages：
+
+```text
+https://wxm510846302.github.io/shufa/?api=https://fc-xxx.next.bspapp.com&apiMode=json
+```
+
+`apiMode=json` 表示前端会把压缩后的图片用 base64 JSON 发给 uniCloud 云函数，由云函数内部调用 Gemini。不要把 `get-gemini-api-key` 的返回值暴露给正式页面。

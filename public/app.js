@@ -25,6 +25,7 @@ const maxUploadDimension = 1600;
 const maxDirectUploadSize = 2.5 * 1024 * 1024;
 const compressedImageQuality = 0.86;
 const apiBaseUrl = getApiBaseUrl();
+const apiMode = getApiMode();
 
 const state = {
   file: null,
@@ -174,14 +175,9 @@ async function submitReview() {
 
   try {
     const uploadFile = await prepareImageForUpload(state.file);
-    const formData = new FormData();
-    formData.append('image', uploadFile);
-    formData.append('style', state.style);
-
-    const response = await fetch(apiUrl('/api/calligraphy-review'), {
-      method: 'POST',
-      body: formData
-    });
+    const response = apiMode === 'json'
+      ? await submitJsonReview(uploadFile)
+      : await submitMultipartReview(uploadFile);
     const payload = await parseJsonResponse(response);
     if (!payload.success) {
       throw new Error(payload.message || '点评失败');
@@ -192,6 +188,33 @@ async function submitReview() {
     setMode('upload');
     showError(error.message || 'AI 点评失败，请稍后重试');
   }
+}
+
+async function submitMultipartReview(uploadFile) {
+  const formData = new FormData();
+  formData.append('image', uploadFile);
+  formData.append('style', state.style);
+
+  return fetch(apiUrl('/api/calligraphy-review'), {
+    method: 'POST',
+    body: formData
+  });
+}
+
+async function submitJsonReview(uploadFile) {
+  const dataUrl = await fileToDataUrl(uploadFile);
+  const [meta, imageBase64] = dataUrl.split(',');
+  const mimeType = meta.match(/^data:(.*?);base64$/)?.[1] || uploadFile.type || 'image/jpeg';
+
+  return fetch(apiUrl('/api/calligraphy-review'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      imageBase64,
+      mimeType,
+      style: state.style
+    })
+  });
 }
 
 function getApiBaseUrl() {
@@ -223,6 +246,18 @@ function apiUrl(path) {
 
 function isStaticPagesWithoutApi() {
   return window.location.hostname.endsWith('github.io') && !apiBaseUrl;
+}
+
+function getApiMode() {
+  const params = new URLSearchParams(window.location.search);
+  const configuredMode = params.get('apiMode') || localStorage.getItem('CALLIGRAPHY_API_MODE') || '';
+
+  if (configuredMode) {
+    localStorage.setItem('CALLIGRAPHY_API_MODE', configuredMode);
+    return configuredMode;
+  }
+
+  return apiBaseUrl.includes('bspapp.com') ? 'json' : 'multipart';
 }
 
 async function parseJsonResponse(response) {
@@ -297,6 +332,15 @@ function loadImage(file) {
     };
 
     image.src = url;
+  });
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('图片读取失败，请重新选择图片'));
+    reader.readAsDataURL(file);
   });
 }
 
