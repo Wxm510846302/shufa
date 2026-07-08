@@ -18,6 +18,12 @@ const maxImageSize = 10 * 1024 * 1024;
 const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
 export default async function handler(req, res) {
+  setCorsHeaders(res);
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return sendError(res, 'METHOD_NOT_ALLOWED', '仅支持 POST 请求', 405);
@@ -95,4 +101,10 @@ function getFileValue(value) {
 
 function sendError(res, errorCode, message, status = 400) {
   return res.status(status).json({ success: false, error_code: errorCode, message });
+}
+
+function setCorsHeaders(res) {
+  res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }

@@ -24,6 +24,7 @@ const typeColors = {
 const maxUploadDimension = 1600;
 const maxDirectUploadSize = 2.5 * 1024 * 1024;
 const compressedImageQuality = 0.86;
+const apiBaseUrl = getApiBaseUrl();
 
 const state = {
   file: null,
@@ -135,8 +136,14 @@ function showError(message) {
 }
 
 async function loadStatus() {
+  if (isStaticPagesWithoutApi()) {
+    els.modelBadge.textContent = 'Pages 静态模式 · 未配置 API 地址';
+    els.modelBadge.classList.add('mock');
+    return;
+  }
+
   try {
-    const response = await fetch('/api/status');
+    const response = await fetch(apiUrl('/api/status'));
     const payload = await response.json();
     const data = payload.data;
     if (data?.provider === 'gemini') {
@@ -158,6 +165,11 @@ async function submitReview() {
     return;
   }
 
+  if (isStaticPagesWithoutApi()) {
+    showError('GitHub Pages 只能托管静态页面。请先部署 Node/Vercel/Render 后端，再用 ?api=https://你的后端域名 打开本页面。');
+    return;
+  }
+
   setMode('loading');
 
   try {
@@ -166,7 +178,7 @@ async function submitReview() {
     formData.append('image', uploadFile);
     formData.append('style', state.style);
 
-    const response = await fetch('/api/calligraphy-review', {
+    const response = await fetch(apiUrl('/api/calligraphy-review'), {
       method: 'POST',
       body: formData
     });
@@ -180,6 +192,37 @@ async function submitReview() {
     setMode('upload');
     showError(error.message || 'AI 点评失败，请稍后重试');
   }
+}
+
+function getApiBaseUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const queryApiBaseUrl = params.get('api');
+
+  if (queryApiBaseUrl) {
+    const normalized = normalizeApiBaseUrl(queryApiBaseUrl);
+    if (normalized) {
+      localStorage.setItem('CALLIGRAPHY_API_BASE_URL', normalized);
+      return normalized;
+    }
+  }
+
+  return normalizeApiBaseUrl(
+    window.CALLIGRAPHY_API_BASE_URL ||
+    localStorage.getItem('CALLIGRAPHY_API_BASE_URL') ||
+    ''
+  );
+}
+
+function normalizeApiBaseUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
+function apiUrl(path) {
+  return `${apiBaseUrl}${path}`;
+}
+
+function isStaticPagesWithoutApi() {
+  return window.location.hostname.endsWith('github.io') && !apiBaseUrl;
 }
 
 async function parseJsonResponse(response) {
