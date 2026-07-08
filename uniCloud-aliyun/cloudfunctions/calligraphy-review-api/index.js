@@ -14,13 +14,14 @@ const styleLabels = {
 exports.main = async function (event) {
   const method = String(event.httpMethod || event.method || 'GET').toUpperCase();
   const path = String(event.path || event.url || '');
+  const respond = (data, statusCode) => jsonResponse(data, statusCode, event);
 
   if (method === 'OPTIONS') {
-    return jsonResponse({}, 204);
+    return respond({}, 204);
   }
 
   if (method === 'GET' && path.endsWith('/api/status')) {
-    return jsonResponse({
+    return respond({
       success: true,
       data: getModelStatus()
     });
@@ -32,7 +33,7 @@ exports.main = async function (event) {
       const styleLabel = styleLabels[body.style];
 
       if (!body.imageBase64 || !body.mimeType) {
-        return jsonResponse({
+        return respond({
           success: false,
           error_code: 'IMAGE_REQUIRED',
           message: '请先上传一张书法作业图片'
@@ -40,7 +41,7 @@ exports.main = async function (event) {
       }
 
       if (!styleLabel) {
-        return jsonResponse({
+        return respond({
           success: false,
           error_code: 'STYLE_REQUIRED',
           message: '请选择正在学习的书法类型'
@@ -48,7 +49,7 @@ exports.main = async function (event) {
       }
 
       if (!hasGeminiApiKey()) {
-        return jsonResponse({
+        return respond({
           success: false,
           error_code: 'GEMINI_API_KEY_MISSING',
           message: '云函数环境变量 GEMINI_API_KEY 未配置'
@@ -63,7 +64,7 @@ exports.main = async function (event) {
       const review = normalizeReview(analysis.review, styleLabel);
       const reviewId = `demo_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Math.random().toString(16).slice(2, 10)}`;
 
-      return jsonResponse({
+      return respond({
         success: true,
         data: {
           review_id: reviewId,
@@ -76,7 +77,7 @@ exports.main = async function (event) {
       });
     } catch (error) {
       console.error(error);
-      return jsonResponse({
+      return respond({
         success: false,
         error_code: 'AI_REVIEW_FAILED',
         message: `AI 点评暂时失败：${getPublicErrorMessage(error)}`
@@ -84,7 +85,7 @@ exports.main = async function (event) {
     }
   }
 
-  return jsonResponse({
+  return respond({
     success: false,
     error_code: 'NOT_FOUND',
     message: '接口不存在'
@@ -101,19 +102,30 @@ function parseJsonBody(event) {
   return JSON.parse(rawBody || '{}');
 }
 
-function jsonResponse(data, statusCode = 200) {
+function jsonResponse(data, statusCode = 200, event = {}) {
   return {
     mpserverlessComposedResponse: true,
     isBase64Encoded: false,
     statusCode,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Content-Type': 'application/json; charset=utf-8'
-    },
+    headers: corsHeaders(event),
     body: JSON.stringify(data)
   };
+}
+
+function corsHeaders(event) {
+  const headers = event.headers || {};
+  const origin = headers.origin || headers.Origin || '*';
+  const responseHeaders = {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json; charset=utf-8',
+    Vary: 'Origin'
+  };
+  if (origin !== '*') {
+    responseHeaders['Access-Control-Allow-Credentials'] = 'true';
+  }
+  return responseHeaders;
 }
 
 function getModelStatus() {
@@ -122,7 +134,9 @@ function getModelStatus() {
     provider: hasGeminiApiKey() ? 'gemini' : 'mock',
     model: hasGeminiApiKey() ? model : 'local-mock',
     fallback_models: hasGeminiApiKey() ? getGeminiModels().slice(1) : [],
-    gemini_configured: hasGeminiApiKey()
+    gemini_configured: hasGeminiApiKey(),
+    gemini_api_base_url: getGeminiApiBaseUrl(),
+    using_default_gemini_api: getGeminiApiBaseUrl() === defaultGeminiApiBaseUrl
   };
 }
 
@@ -162,7 +176,7 @@ async function requestGeminiReview({ imageBase64, mimeType, styleLabel }) {
   const errors = [];
   for (const model of getGeminiModels()) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY.trim())}`;
+      const url = `${getGeminiApiBaseUrl()}/models/${model}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY.trim())}`;
       const response = await requestJson(url, requestBody);
       const payload = response.payload;
 
@@ -220,7 +234,7 @@ function requestJson(url, body) {
     });
 
     req.on('error', reject);
-    req.setTimeout(55000, () => {
+    req.setTimeout(getRequestTimeoutMs(), () => {
       req.destroy(new Error('GEMINI_REQUEST_TIMEOUT'));
     });
     req.write(body);
@@ -228,9 +242,20 @@ function requestJson(url, body) {
   });
 }
 
+const defaultGeminiApiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+
+function getGeminiApiBaseUrl() {
+  return String(process.env.GEMINI_API_BASE_URL || defaultGeminiApiBaseUrl).trim().replace(/\/+$/, '');
+}
+
+function getRequestTimeoutMs() {
+  const timeout = Number(process.env.GEMINI_REQUEST_TIMEOUT_MS || 55000);
+  return Number.isFinite(timeout) && timeout > 0 ? timeout : 55000;
+}
+
 function isRetryableGeminiError(error) {
   const message = String(error.message || '').toLowerCase();
-  return ['high demand', 'temporarily unavailable', 'unavailable', 'overloaded', 'quota', 'rate limit', '429', '503', '504', 'fetch failed', 'network']
+  return ['high demand', 'temporarily unavailable', 'unavailable', 'overloaded', 'quota', 'rate limit', '429', '503', '504', 'fetch failed', 'network', 'etimedout', 'econnreset', 'enotfound', 'gemini_request_timeout']
     .some((keyword) => message.includes(keyword));
 }
 
@@ -390,7 +415,8 @@ function getPublicErrorMessage(error) {
   const message = String(error.message || '');
   if (message.includes('API key not valid')) return 'Gemini API Key 无效，请检查 GEMINI_API_KEY';
   if (message.includes('models/') && message.includes('not found')) return '当前 GEMINI_MODEL 不可用，请换成账号可用的 Gemini 模型';
-  if (message.includes('fetch failed')) return '无法连接 Gemini API，请检查云函数网络';
+  if (message.includes('ETIMEDOUT') || message.includes('GEMINI_REQUEST_TIMEOUT')) return '云函数连接 Gemini 超时。阿里云 uniCloud 默认环境可能无法直连 Google，请配置 GEMINI_API_BASE_URL 为可访问的 Gemini 代理地址，或把后端部署到可访问 Google 的服务器';
+  if (message.includes('fetch failed')) return '无法连接 Gemini API，请检查云函数网络或 GEMINI_API_BASE_URL 代理配置';
   if (message.includes('EMPTY_GEMINI_RESPONSE')) return 'Gemini 没有返回可解析内容，请换一张更清晰的图片再试';
   if (message.includes('GEMINI_REQUEST_FAILED')) return message.replace('GEMINI_REQUEST_FAILED: ', '');
   return '请稍后重试，或换一张更清晰的图片';
