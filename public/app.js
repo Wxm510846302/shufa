@@ -145,7 +145,7 @@ async function loadStatus() {
 
   try {
     const response = await fetch(apiUrl('/api/status'));
-    const payload = await response.json();
+    const payload = unwrapUniCloudResponse(await response.json());
     const data = payload.data;
     if (data?.provider === 'gemini') {
       els.modelBadge.textContent = `Gemini 已接入 · ${data.model}`;
@@ -271,6 +271,7 @@ async function parseJsonResponse(response) {
 
   try {
     payload = JSON.parse(text);
+    payload = unwrapUniCloudResponse(payload);
   } catch {
     if (response.status === 504) {
       throw new Error('AI 点评超时了，请换一张更清晰、文件更小的图片再试');
@@ -286,6 +287,17 @@ async function parseJsonResponse(response) {
     throw new Error(payload.message || `请求失败（${response.status}）`);
   }
 
+  return payload;
+}
+
+function unwrapUniCloudResponse(payload) {
+  if (payload && typeof payload === 'object' && typeof payload.body === 'string') {
+    try {
+      return JSON.parse(payload.body);
+    } catch {
+      return payload;
+    }
+  }
   return payload;
 }
 
