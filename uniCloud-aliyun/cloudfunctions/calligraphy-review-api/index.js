@@ -103,6 +103,8 @@ function parseJsonBody(event) {
 
 function jsonResponse(data, statusCode = 200) {
   return {
+    mpserverlessComposedResponse: true,
+    isBase64Encoded: false,
     statusCode,
     headers: {
       'Access-Control-Allow-Origin': '*',
