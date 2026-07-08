@@ -132,7 +132,16 @@ GEMINI_MODEL=gemini-2.5-flash-lite
 https://fc-xxx.next.bspapp.com
 ```
 
-4. 用下面格式打开 GitHub Pages：
+4. 如果想让 `https://wxm510846302.github.io/shufa/` 裸链接直接可用，把云函数 URL 写到 `public/config.js`：
+
+```js
+window.CALLIGRAPHY_API_BASE_URL = 'https://fc-xxx.next.bspapp.com';
+window.CALLIGRAPHY_API_MODE = 'json';
+```
+
+然后重新发布 `public/` 到 GitHub Pages。
+
+也可以临时用下面格式打开 GitHub Pages：
 
 ```text
 https://wxm510846302.github.io/shufa/?api=https://fc-xxx.next.bspapp.com&apiMode=json

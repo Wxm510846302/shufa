@@ -1,0 +1,2 @@
+window.CALLIGRAPHY_API_BASE_URL = '';
+window.CALLIGRAPHY_API_MODE = 'json';

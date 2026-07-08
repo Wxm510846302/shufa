@@ -237,7 +237,9 @@ function getApiBaseUrl() {
 }
 
 function normalizeApiBaseUrl(value) {
-  return String(value || '').trim().replace(/\/+$/, '');
+  const normalized = String(value || '').trim().replace(/\/+$/, '');
+  if (/^(https?:\/\/)?(fc-xxx|你的|your-|example)/i.test(normalized)) return '';
+  return normalized;
 }
 
 function apiUrl(path) {
@@ -250,7 +252,10 @@ function isStaticPagesWithoutApi() {
 
 function getApiMode() {
   const params = new URLSearchParams(window.location.search);
-  const configuredMode = params.get('apiMode') || localStorage.getItem('CALLIGRAPHY_API_MODE') || '';
+  const configuredMode = params.get('apiMode') ||
+    window.CALLIGRAPHY_API_MODE ||
+    localStorage.getItem('CALLIGRAPHY_API_MODE') ||
+    '';
 
   if (configuredMode) {
     localStorage.setItem('CALLIGRAPHY_API_MODE', configuredMode);
