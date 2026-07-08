@@ -1,0 +1,17 @@
+{
+  "services": {
+    "calligraphy-review-demo": {
+      "root": ".",
+      "entrypoint": "server.js"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "calligraphy-review-demo"
+      }
+    }
+  ]
+}

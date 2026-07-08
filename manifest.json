@@ -1,0 +1,12 @@
+{
+  "name": "calligraphy-review-demo",
+  "appid": "__UNI__F181DAE",
+  "description": "书法作业 AI 点评 Demo",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "app-plus": {},
+  "quickapp": {},
+  "mp-weixin": {},
+  "h5": {}
+}
