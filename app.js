@@ -145,7 +145,7 @@ async function loadStatus() {
 
   try {
     const response = await fetch(apiUrl('/api/status'));
-    const payload = await response.json();
+    const payload = unwrapUniCloudResponse(await response.json());
     const data = payload.data;
     if (data?.provider === 'gemini') {
       els.modelBadge.textContent = `Gemini 已接入 · ${data.model}`;
@@ -237,7 +237,9 @@ function getApiBaseUrl() {
 }
 
 function normalizeApiBaseUrl(value) {
-  return String(value || '').trim().replace(/\/+$/, '');
+  const normalized = String(value || '').trim().replace(/\/+$/, '');
+  if (/^(https?:\/\/)?(fc-xxx|你的|your-|example)/i.test(normalized)) return '';
+  return normalized;
 }
 
 function apiUrl(path) {
@@ -250,7 +252,10 @@ function isStaticPagesWithoutApi() {
 
 function getApiMode() {
   const params = new URLSearchParams(window.location.search);
-  const configuredMode = params.get('apiMode') || localStorage.getItem('CALLIGRAPHY_API_MODE') || '';
+  const configuredMode = params.get('apiMode') ||
+    window.CALLIGRAPHY_API_MODE ||
+    localStorage.getItem('CALLIGRAPHY_API_MODE') ||
+    '';
 
   if (configuredMode) {
     localStorage.setItem('CALLIGRAPHY_API_MODE', configuredMode);
@@ -266,6 +271,7 @@ async function parseJsonResponse(response) {
 
   try {
     payload = JSON.parse(text);
+    payload = unwrapUniCloudResponse(payload);
   } catch {
     if (response.status === 504) {
       throw new Error('AI 点评超时了，请换一张更清晰、文件更小的图片再试');
@@ -281,6 +287,17 @@ async function parseJsonResponse(response) {
     throw new Error(payload.message || `请求失败（${response.status}）`);
   }
 
+  return payload;
+}
+
+function unwrapUniCloudResponse(payload) {
+  if (payload && typeof payload === 'object' && typeof payload.body === 'string') {
+    try {
+      return JSON.parse(payload.body);
+    } catch {
+      return payload;
+    }
+  }
   return payload;
 }
 
