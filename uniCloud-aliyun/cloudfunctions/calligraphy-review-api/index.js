@@ -1,5 +1,7 @@
 'use strict';
 
+const https = require('https');
+
 const styleLabels = {
   kaishu: '楷书',
   xingshu: '行书',
@@ -159,14 +161,10 @@ async function requestGeminiReview({ imageBase64, mimeType, styleLabel }) {
   for (const model of getGeminiModels()) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY.trim())}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: requestBody
-      });
-      const payload = await response.json().catch(() => ({}));
+      const response = await requestJson(url, requestBody);
+      const payload = response.payload;
 
-      if (!response.ok) {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
         throw new Error((payload.error && payload.error.message) || response.statusText);
       }
 
@@ -189,6 +187,43 @@ async function requestGeminiReview({ imageBase64, mimeType, styleLabel }) {
   }
 
   throw new Error(`GEMINI_REQUEST_FAILED: ${errors.join(' | ')}`);
+}
+
+function requestJson(url, body) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        let payload = {};
+        try {
+          payload = text ? JSON.parse(text) : {};
+        } catch (error) {
+          reject(new Error(`INVALID_JSON_RESPONSE: ${text.slice(0, 120)}`));
+          return;
+        }
+        resolve({
+          statusCode: res.statusCode || 0,
+          statusText: res.statusMessage || '',
+          payload
+        });
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(55000, () => {
+      req.destroy(new Error('GEMINI_REQUEST_TIMEOUT'));
+    });
+    req.write(body);
+    req.end();
+  });
 }
 
 function isRetryableGeminiError(error) {
