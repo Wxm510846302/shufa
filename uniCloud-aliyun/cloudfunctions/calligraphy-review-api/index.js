@@ -12,22 +12,21 @@ const styleLabels = {
 };
 
 exports.main = async function (event) {
-  const method = String(event.httpMethod || event.method || 'GET').toUpperCase();
-  const path = String(event.path || event.url || '');
+  const route = getRequestRoute(event);
   const respond = (data, statusCode) => jsonResponse(data, statusCode, event);
 
-  if (method === 'OPTIONS') {
+  if (route.method === 'OPTIONS') {
     return respond({}, 204);
   }
 
-  if (method === 'GET' && path.endsWith('/api/status')) {
+  if (route.method === 'GET' && route.isStatus) {
     return respond({
       success: true,
       data: getModelStatus()
     });
   }
 
-  if (method === 'POST' && path.endsWith('/api/calligraphy-review')) {
+  if (route.method === 'POST' && route.isReview) {
     try {
       const body = parseJsonBody(event);
       const styleLabel = styleLabels[body.style];
@@ -91,6 +90,17 @@ exports.main = async function (event) {
     message: '接口不存在'
   }, 404);
 };
+
+function getRequestRoute(event) {
+  const method = String(event.httpMethod || event.method || 'GET').toUpperCase();
+  const rawPath = String(event.path || event.url || '').split('?')[0].replace(/\/+$/, '') || '/';
+
+  return {
+    method,
+    isStatus: rawPath === '/api/status' || rawPath === '/status' || rawPath.endsWith('/api/status'),
+    isReview: rawPath === '/api/calligraphy-review' || rawPath === '/calligraphy-review' || rawPath.endsWith('/api/calligraphy-review')
+  };
+}
 
 function parseJsonBody(event) {
   if (event.body && typeof event.body === 'object') return event.body;
