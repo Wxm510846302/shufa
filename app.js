@@ -390,6 +390,7 @@ async function renderResult(data) {
 }
 
 async function createAnnotatedImageDataUrl(imageSrc, annotations) {
+  const drawableAnnotations = annotations.filter((annotation) => annotation.drawable !== false && hasRenderableBbox(annotation));
   const image = await loadImageFromSrc(imageSrc);
   const canvas = document.createElement('canvas');
   canvas.width = image.naturalWidth;
@@ -398,23 +399,28 @@ async function createAnnotatedImageDataUrl(imageSrc, annotations) {
   const context = canvas.getContext('2d');
   context.drawImage(image, 0, 0);
 
-  annotations.forEach((annotation, index) => {
+  drawableAnnotations.forEach((annotation, index) => {
     drawAnnotationBox(context, annotation, canvas.width, canvas.height, index);
   });
 
   return canvas.toDataURL('image/png');
 }
 
+function hasRenderableBbox(annotation) {
+  const bbox = annotation.bbox || {};
+  return Number(bbox.width) > 0 && Number(bbox.height) > 0;
+}
+
 function drawAnnotationBox(context, annotation, width, height, index) {
   const color = typeColors[annotation.type] || typeColors.issue;
   const bbox = annotation.bbox || {};
-  const x = Math.round(Number(bbox.x || 0) * width);
-  const y = Math.round(Number(bbox.y || 0) * height);
-  const boxWidth = Math.round(Number(bbox.width || 0.2) * width);
-  const boxHeight = Math.round(Number(bbox.height || 0.16) * height);
+  const x = Math.round(Number(bbox.x) * width);
+  const y = Math.round(Number(bbox.y) * height);
+  const boxWidth = Math.round(Number(bbox.width) * width);
+  const boxHeight = Math.round(Number(bbox.height) * height);
   const label = String(annotation.id || `A${String(index + 1).padStart(3, '0')}`);
-  const labelWidth = Math.max(54, label.length * 9 + 18);
-  const labelY = Math.max(0, y - 30);
+  const labelWidth = Math.max(48, label.length * 9 + 16);
+  const labelY = Math.max(0, y - 30 - (index % 3) * 34);
 
   context.strokeStyle = color;
   context.lineWidth = 5;
@@ -428,7 +434,7 @@ function drawAnnotationBox(context, annotation, width, height, index) {
   context.fillStyle = '#ffffff';
   context.font = '700 18px Arial, sans-serif';
   context.textBaseline = 'alphabetic';
-  context.fillText(label, x + 10, Math.max(22, y - 9));
+  context.fillText(label, x + 10, Math.max(22, labelY + 22));
 }
 
 function roundRect(context, x, y, width, height, radius) {
@@ -472,7 +478,7 @@ function renderAnnotations(annotations) {
     card.innerHTML = `
       <div class="annotation-title">
         <span>${escapeHtml(annotation.id)} · ${escapeHtml(annotation.title)}</span>
-        <span class="tag">${typeLabels[annotation.type] || '点评'}</span>
+        <span class="tag">${annotation.display_style === 'text_only' ? '全图点评' : (typeLabels[annotation.type] || '点评')}</span>
       </div>
       <p><strong>对应位置：</strong>${escapeHtml(annotation.target_text)}</p>
       <p>${escapeHtml(annotation.comment)}</p>
