@@ -187,7 +187,7 @@ async function submitReview() {
     if (!payload.success) {
       throw new Error(payload.message || '点评失败');
     }
-    renderResult(payload.data);
+    await renderResult(payload.data);
     setMode('result');
   } catch (error) {
     setMode('upload');
@@ -366,9 +366,13 @@ function fileToDataUrl(file) {
   });
 }
 
-function renderResult(data) {
-  els.annotatedImage.src = data.annotated_image_url;
-  els.downloadBtn.href = data.annotated_image_url;
+async function renderResult(data) {
+  const annotatedImageUrl = apiMode === 'json' && Array.isArray(data.annotations) && data.annotations.length
+    ? await createAnnotatedImageDataUrl(data.annotated_image_url, data.annotations)
+    : data.annotated_image_url;
+
+  els.annotatedImage.src = annotatedImageUrl;
+  els.downloadBtn.href = annotatedImageUrl;
   els.downloadBtn.download = `${data.review_id}_annotated.png`;
   els.scoreValue.textContent = Math.round(data.calligraphy_info.overall_score);
   els.sourceText.textContent = data.analysis_source === 'gemini'
@@ -383,6 +387,71 @@ function renderResult(data) {
   els.todayFocus.textContent = data.practice_advice.today_focus;
   els.practiceMethod.textContent = data.practice_advice.practice_method;
   els.practiceTime.textContent = data.practice_advice.estimated_practice_time;
+}
+
+async function createAnnotatedImageDataUrl(imageSrc, annotations) {
+  const image = await loadImageFromSrc(imageSrc);
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+
+  const context = canvas.getContext('2d');
+  context.drawImage(image, 0, 0);
+
+  annotations.forEach((annotation, index) => {
+    drawAnnotationBox(context, annotation, canvas.width, canvas.height, index);
+  });
+
+  return canvas.toDataURL('image/png');
+}
+
+function drawAnnotationBox(context, annotation, width, height, index) {
+  const color = typeColors[annotation.type] || typeColors.issue;
+  const bbox = annotation.bbox || {};
+  const x = Math.round(Number(bbox.x || 0) * width);
+  const y = Math.round(Number(bbox.y || 0) * height);
+  const boxWidth = Math.round(Number(bbox.width || 0.2) * width);
+  const boxHeight = Math.round(Number(bbox.height || 0.16) * height);
+  const label = String(annotation.id || `A${String(index + 1).padStart(3, '0')}`);
+  const labelWidth = Math.max(54, label.length * 9 + 18);
+  const labelY = Math.max(0, y - 30);
+
+  context.strokeStyle = color;
+  context.lineWidth = 5;
+  roundRect(context, x, y, boxWidth, boxHeight, 8);
+  context.stroke();
+
+  context.fillStyle = color;
+  roundRect(context, x, labelY, labelWidth, 30, 8);
+  context.fill();
+
+  context.fillStyle = '#ffffff';
+  context.font = '700 18px Arial, sans-serif';
+  context.textBaseline = 'alphabetic';
+  context.fillText(label, x + 10, Math.max(22, y - 9));
+}
+
+function roundRect(context, x, y, width, height, radius) {
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.lineTo(x + width - radius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + radius);
+  context.lineTo(x + width, y + height - radius);
+  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  context.lineTo(x + radius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - radius);
+  context.lineTo(x, y + radius);
+  context.quadraticCurveTo(x, y, x + radius, y);
+  context.closePath();
+}
+
+function loadImageFromSrc(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('标注图片加载失败'));
+    image.src = src;
+  });
 }
 
 function renderList(element, items) {
