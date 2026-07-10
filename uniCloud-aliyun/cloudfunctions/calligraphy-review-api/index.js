@@ -287,7 +287,14 @@ function buildPrompt(styleLabel) {
 
 用户选择的书法类型是：${styleLabel}
 
-请完成：识别主要文字；判断整体书写情况；从笔画、结构、章法、墨色、书体特征点评；找出 3-6 个最值得标注的点评点；每个点评点定位到具体区域；bbox 使用 0-1 归一化坐标；语言温和、鼓励、具体，适合中老年用户理解；如果图片模糊或遮挡，也给出可识别范围内点评并提示重新上传更清晰图片；不要编造无法判断的内容。
+请完成：识别主要文字；判断整体书写情况；从笔画、结构、章法、墨色、书体特征点评；找出 3-5 个最值得标注的点评点；语言温和、鼓励、具体，适合中老年用户理解；如果图片模糊或遮挡，也给出可识别范围内点评并提示重新上传更清晰图片；不要编造无法判断的内容。
+
+bbox 坐标规则（非常重要）：
+- 仅当点评对应图中某一个具体汉字时，才返回 bbox，并设 display_style 为 "box"
+- bbox 使用相对整张图片宽高的 0-1 小数；x、y 为矩形左上角，width、height 为矩形宽高
+- 框必须尽量贴紧该字墨迹外沿，单字框宽度通常 0.08-0.22，高度通常 0.08-0.25
+- target_text 必须写该框对应的具体汉字，不要写“整体”“章法”“墨色”等笼统描述
+- 若点评对象是整体墨色、章法布局、行气笔力等全图层面内容，请设 display_style 为 "text_only"，不要返回 bbox
 
 标注类型：praise 写得好的地方；issue 存在问题；suggestion 重点修改建议；warning 图片质量或识别风险。
 
@@ -401,22 +408,50 @@ function normalizeReview(review, styleLabel) {
 
 function normalizeAnnotation(item, index) {
   const type = ['praise', 'issue', 'suggestion', 'warning'].includes(item?.type) ? item.type : 'issue';
-  const bbox = item?.bbox || {};
+  const targetText = String(item?.target_text || '局部');
+  const displayStyle = String(item?.display_style || 'box');
+  const rawBbox = item?.bbox || {};
+  const drawable = shouldDrawAnnotation({ targetText, displayStyle, rawBbox });
+  const bbox = drawable ? normalizeBbox(rawBbox) : { x: 0, y: 0, width: 0, height: 0 };
+
   return {
-    id: item?.id || `A${String(index + 1).padStart(3, '0')}`,
+    id: `A${String(index + 1).padStart(3, '0')}`,
     type,
-    target_text: String(item?.target_text || '局部'),
-    bbox: {
-      x: clampNumber(bbox.x, 0, 0.98, 0.1),
-      y: clampNumber(bbox.y, 0, 0.98, 0.1),
-      width: clampNumber(bbox.width, 0.04, 1, 0.2),
-      height: clampNumber(bbox.height, 0.04, 1, 0.16)
-    },
+    target_text: targetText,
+    bbox,
+    drawable,
     title: String(item?.title || '结构可再调整'),
     comment: String(item?.comment || '这个位置可以继续观察笔画之间的关系。'),
     suggestion: String(item?.suggestion || '下次书写前先慢慢观察位置，再落笔练习。'),
     severity: ['low', 'medium', 'high'].includes(item?.severity) ? item.severity : 'medium',
-    display_style: item?.display_style || 'box'
+    display_style: drawable ? 'box' : 'text_only'
+  };
+}
+
+function shouldDrawAnnotation({ targetText, displayStyle, rawBbox }) {
+  if (displayStyle === 'text_only') return false;
+  if (/整体|全图|章法|墨|笔力|行气|布局|连带/.test(targetText)) return false;
+
+  const x = Number(rawBbox.x);
+  const y = Number(rawBbox.y);
+  const width = Number(rawBbox.width);
+  const height = Number(rawBbox.height);
+  if (![x, y, width, height].every(Number.isFinite)) return false;
+  if (width <= 0 || height <= 0) return false;
+  if (width > 0.35 || height > 0.35 || width * height > 0.12) return false;
+  return true;
+}
+
+function normalizeBbox(bbox) {
+  const x = clampNumber(bbox.x, 0, 0.95, 0);
+  const y = clampNumber(bbox.y, 0, 0.95, 0);
+  const width = clampNumber(bbox.width, 0.02, 0.35, 0.12);
+  const height = clampNumber(bbox.height, 0.02, 0.35, 0.12);
+  return {
+    x: Math.min(x, 0.95),
+    y: Math.min(y, 0.95),
+    width: Math.min(width, 0.95 - x),
+    height: Math.min(height, 0.95 - y)
   };
 }
 
