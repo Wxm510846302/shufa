@@ -399,9 +399,8 @@ async function createAnnotatedImageDataUrl(imageSrc, annotations) {
   const context = canvas.getContext('2d');
   context.drawImage(image, 0, 0);
 
-  const labelSlots = [];
   drawableAnnotations.forEach((annotation, index) => {
-    drawAnnotationBox(context, annotation, canvas.width, canvas.height, index, labelSlots);
+    drawAnnotationBox(context, annotation, canvas.width, canvas.height, index);
   });
 
   return canvas.toDataURL('image/png');
@@ -412,7 +411,7 @@ function hasRenderableBbox(annotation) {
   return Number(bbox.width) > 0 && Number(bbox.height) > 0;
 }
 
-function drawAnnotationBox(context, annotation, width, height, index, labelSlots) {
+function drawAnnotationBox(context, annotation, width, height, index) {
   const color = typeColors[annotation.type] || typeColors.issue;
   const bbox = annotation.bbox || {};
   const x = Math.round(Number(bbox.x) * width);
