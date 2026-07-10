@@ -19,37 +19,38 @@ npm start
 http://localhost:3000
 ```
 
-## Gemini 配置
+## Gemini 配置（API易 中转）
 
-复制 `.env.example` 为 `.env`，填入 Google AI Studio API Key：
+本项目默认通过 [API易](https://api.apiyi.com) 的 Gemini 原生格式接口调用模型，无需直连 Google。文档：https://docs.apiyi.com/api-capabilities/gemini/native
+
+复制 `.env.example` 为 `.env`，填入 API易 平台生成的 Key：
 
 ```bash
-GEMINI_API_KEY=your_google_ai_studio_api_key
+GEMINI_API_KEY=sk-your_apiyi_api_key
 GEMINI_MODEL=gemini-2.5-flash-lite
 GEMINI_FALLBACK_MODELS=gemini-2.5-flash,gemini-3.5-flash
-GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+GEMINI_API_BASE_URL=https://api.apiyi.com/v1beta
 PORT=3000
 ```
+
+注意：`GEMINI_API_KEY` 应使用 API易 平台生成的 Key（通常以 `sk-` 开头），**不是** Google AI Studio 的 Key。
 
 未配置 `GEMINI_API_KEY` 时，Demo 会自动使用本地 mock 点评数据，上传、标注图生成和下载流程仍然可用。
 
 页面右上角会显示当前模式：
 
-- `Gemini 已接入`: 正在调用真实 Gemini API
+- `Gemini 已接入`: 正在调用真实 Gemini API（经 API易 中转）
 - `Mock 模式`: 没有读取到 `GEMINI_API_KEY`，返回的是本地演示数据
 
-如果线上出现 `This model is currently experiencing high demand`，说明 Google Gemini 当前模型拥堵。代码已支持按 `GEMINI_MODEL`、`GEMINI_FALLBACK_MODELS` 顺序自动重试其他模型；技术同事也可以在部署平台调整这两个环境变量。
+如果线上出现 `This model is currently experiencing high demand`，说明当前模型拥堵。代码已支持按 `GEMINI_MODEL`、`GEMINI_FALLBACK_MODELS` 顺序自动重试其他模型。
 
-如果 uniCloud 云函数报 `connect ETIMEDOUT ...:443`，说明云函数运行环境无法直连 Google Gemini。解决方式二选一：
-
-- 将后端部署到可以访问 Google 的 Node/Vercel/Render/自有服务器。
-- 配置一个兼容 Gemini REST API 的代理地址，并在云函数环境变量里设置：
+如需改回直连 Google AI Studio，可将 `GEMINI_API_BASE_URL` 设为：
 
 ```text
-GEMINI_API_BASE_URL=https://你的代理域名/v1beta
+GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 ```
 
-默认值是 `https://generativelanguage.googleapis.com/v1beta`。
+并改用 Google AI Studio 的 API Key。
 
 ## 接口
 
@@ -69,11 +70,11 @@ Content-Type: multipart/form-data
 
 - Node.js 建议使用 20+。
 - 启动命令：`npm start`
-- 生产环境变量至少配置：`GEMINI_API_KEY`
+- 生产环境变量至少配置：`GEMINI_API_KEY`（API易 Key）
 - 推荐环境变量：
   - `GEMINI_MODEL=gemini-2.5-flash-lite`
   - `GEMINI_FALLBACK_MODELS=gemini-2.5-flash,gemini-3.5-flash`
-  - `GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta`
+  - `GEMINI_API_BASE_URL=https://api.apiyi.com/v1beta`
 - Vercel 已包含 `vercel.json`。
 - Render 已包含 `render.yaml`。
 - 上传图片会临时写入 `/tmp` 或 `public/uploads/tmp`，请求结束后自动清理。
@@ -102,7 +103,7 @@ uniCloud-aliyun/cloudfunctions/get-gemini-api-key/
 4. 在 uniCloud 控制台给该云函数配置环境变量：
 
 ```text
-GEMINI_API_KEY=你的 Google AI Studio API Key
+GEMINI_API_KEY=你的 API易 API Key
 ```
 
 前端临时调用示例：
@@ -135,9 +136,9 @@ uniCloud-aliyun/cloudfunctions/calligraphy-review-api/
 2. 在 uniCloud 控制台给 `calligraphy-review-api` 配置环境变量：
 
 ```text
-GEMINI_API_KEY=你的 Google AI Studio API Key
+GEMINI_API_KEY=你的 API易 API Key
 GEMINI_MODEL=gemini-2.5-flash-lite
-GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+GEMINI_API_BASE_URL=https://api.apiyi.com/v1beta
 ```
 
 3. 在 `calligraphy-review-api` 的“云函数URL化”里开启 HTTP 访问，复制 URL，例如：

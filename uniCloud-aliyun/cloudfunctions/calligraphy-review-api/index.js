@@ -136,7 +136,7 @@ function getModelStatus() {
     fallback_models: hasGeminiApiKey() ? getGeminiModels().slice(1) : [],
     gemini_configured: hasGeminiApiKey(),
     gemini_api_base_url: getGeminiApiBaseUrl(),
-    using_default_gemini_api: getGeminiApiBaseUrl() === defaultGeminiApiBaseUrl
+    using_apiyi: getGeminiApiBaseUrl().includes('api.apiyi.com')
   };
 }
 
@@ -176,8 +176,8 @@ async function requestGeminiReview({ imageBase64, mimeType, styleLabel }) {
   const errors = [];
   for (const model of getGeminiModels()) {
     try {
-      const url = `${getGeminiApiBaseUrl()}/models/${model}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY.trim())}`;
-      const response = await requestJson(url, requestBody);
+      const url = `${getGeminiApiBaseUrl()}/models/${model}:generateContent`;
+      const response = await requestJson(url, requestBody, process.env.GEMINI_API_KEY.trim());
       const payload = response.payload;
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -205,12 +205,13 @@ async function requestGeminiReview({ imageBase64, mimeType, styleLabel }) {
   throw new Error(`GEMINI_REQUEST_FAILED: ${errors.join(' | ')}`);
 }
 
-function requestJson(url, body) {
+function requestJson(url, body, apiKey) {
   return new Promise((resolve, reject) => {
     const req = https.request(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
         'Content-Length': Buffer.byteLength(body)
       }
     }, (res) => {
@@ -242,7 +243,7 @@ function requestJson(url, body) {
   });
 }
 
-const defaultGeminiApiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+const defaultGeminiApiBaseUrl = 'https://api.apiyi.com/v1beta';
 
 function getGeminiApiBaseUrl() {
   return String(process.env.GEMINI_API_BASE_URL || defaultGeminiApiBaseUrl).trim().replace(/\/+$/, '');
@@ -413,10 +414,10 @@ function clampNumber(value, min, max, fallback) {
 
 function getPublicErrorMessage(error) {
   const message = String(error.message || '');
-  if (message.includes('API key not valid')) return 'Gemini API Key 无效，请检查 GEMINI_API_KEY';
+  if (message.includes('API key not valid')) return 'API Key 无效，请检查 GEMINI_API_KEY（API易 中转请使用 API易 平台生成的 Key）';
   if (message.includes('models/') && message.includes('not found')) return '当前 GEMINI_MODEL 不可用，请换成账号可用的 Gemini 模型';
-  if (message.includes('ETIMEDOUT') || message.includes('GEMINI_REQUEST_TIMEOUT')) return '云函数连接 Gemini 超时。阿里云 uniCloud 默认环境可能无法直连 Google，请配置 GEMINI_API_BASE_URL 为可访问的 Gemini 代理地址，或把后端部署到可访问 Google 的服务器';
-  if (message.includes('fetch failed')) return '无法连接 Gemini API，请检查云函数网络或 GEMINI_API_BASE_URL 代理配置';
+  if (message.includes('ETIMEDOUT') || message.includes('GEMINI_REQUEST_TIMEOUT')) return '云函数连接 Gemini 超时，请检查 GEMINI_API_BASE_URL 是否可访问';
+  if (message.includes('fetch failed')) return '无法连接 Gemini API，请检查云函数网络或 GEMINI_API_BASE_URL 配置';
   if (message.includes('EMPTY_GEMINI_RESPONSE')) return 'Gemini 没有返回可解析内容，请换一张更清晰的图片再试';
   if (message.includes('GEMINI_REQUEST_FAILED')) return message.replace('GEMINI_REQUEST_FAILED: ', '');
   return '请稍后重试，或换一张更清晰的图片';
