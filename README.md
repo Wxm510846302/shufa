@@ -150,11 +150,12 @@ https://fc-xxx.next.bspapp.com
 4. 如果想让 `https://wxm510846302.github.io/shufa/` 裸链接直接可用，把云函数 URL 写到 `public/config.js`：
 
 ```js
-window.CALLIGRAPHY_API_BASE_URL = 'https://fc-mp-你的服务空间ID.next.bspapp.com';
+// URL 化路径为 /api 时，base 需带上 /api，前端会请求 /api/status -> /api/api/status
+window.CALLIGRAPHY_API_BASE_URL = 'https://fc-mp-你的服务空间ID.next.bspapp.com/api';
 window.CALLIGRAPHY_API_MODE = 'json';
 ```
 
-注意：`CALLIGRAPHY_API_BASE_URL` 只填域名，不要带 `/api` 后缀；前端会自动请求 `/api/status` 和 `/api/calligraphy-review`。
+注意：`CALLIGRAPHY_API_BASE_URL` 需包含云函数 URL 化路径（如 `/api`），不要只填域名。
 
 云函数 URL 化路径建议配置为 `/api`，这样完整访问地址为：
 

@@ -94,11 +94,19 @@ exports.main = async function (event) {
 function getRequestRoute(event) {
   const method = String(event.httpMethod || event.method || 'GET').toUpperCase();
   const rawPath = String(event.path || event.url || '').split('?')[0].replace(/\/+$/, '') || '/';
+  const action = String((event.queryStringParameters || {}).action || '').toLowerCase();
 
   return {
     method,
-    isStatus: rawPath === '/api/status' || rawPath === '/status' || rawPath.endsWith('/api/status'),
-    isReview: rawPath === '/api/calligraphy-review' || rawPath === '/calligraphy-review' || rawPath.endsWith('/api/calligraphy-review')
+    isStatus: action === 'status'
+      || rawPath === '/'
+      || rawPath === '/api/status'
+      || rawPath === '/status'
+      || rawPath.endsWith('/api/status'),
+    isReview: action === 'review'
+      || rawPath === '/api/calligraphy-review'
+      || rawPath === '/calligraphy-review'
+      || rawPath.endsWith('/api/calligraphy-review')
   };
 }
 

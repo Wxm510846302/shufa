@@ -147,15 +147,20 @@ async function loadStatus() {
     const response = await fetch(apiUrl('/api/status'));
     const payload = unwrapUniCloudResponse(await response.json());
     const data = payload.data;
-    if (data?.provider === 'gemini') {
+    if (payload.success && data?.provider === 'gemini') {
       els.modelBadge.textContent = `Gemini 已接入 · ${data.model}`;
       els.modelBadge.classList.remove('mock');
+      return;
+    }
+
+    if (!payload.success) {
+      els.modelBadge.textContent = `后端异常 · ${payload.message || '接口不可用'}`;
     } else {
       els.modelBadge.textContent = 'Mock 模式 · 未配置 Gemini Key';
-      els.modelBadge.classList.add('mock');
     }
+    els.modelBadge.classList.add('mock');
   } catch {
-    els.modelBadge.textContent = '模型状态未知';
+    els.modelBadge.textContent = '无法连接后端 · 请检查云函数 URL 化配置';
     els.modelBadge.classList.add('mock');
   }
 }
